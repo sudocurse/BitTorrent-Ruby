@@ -55,6 +55,8 @@ module Bencode
 			raise BencodingError
 		end 
 	end
+
+		module_function :decode, :scan
 end
 
 class Array
@@ -96,39 +98,39 @@ class String
 	end
 end
 
-include Bencode
+# include Bencode
 
-puts "Testing bencoding...\n"
+# puts "Testing bencoding...\n"
 
-test = "spam"
+# test = "spam"
 
-puts "String encode test: " + test.bencode + "\n"
+# puts "String encode test: " + test.bencode + "\n"
 
-test = test.bencode 
+# test = test.bencode 
 
-puts "String decode test: " + Bencode.decode(test) + "\n"
+# puts "String decode test: " + Bencode.decode(test) + "\n"
 
-test = ["spam", "eggs"]
+# test = ["spam", "eggs"]
 
-puts "List encode test: " + test.bencode + "\n"
+# puts "List encode test: " + test.bencode + "\n"
 
-test = test.bencode
+# test = test.bencode
 
-puts "List decode test: " + Bencode.decode(test).to_s + "\n"
+# puts "List decode test: " + Bencode.decode(test).to_s + "\n"
 
-test = 3
+# test = 3
 
-puts "Integer encode test: " + test.bencode + "\n"
+# puts "Integer encode test: " + test.bencode + "\n"
 
-test = test.bencode
+# test = test.bencode
 
-puts "Integer decode test: " + Bencode.decode(test) + "\n"
+# puts "Integer decode test: " + Bencode.decode(test) + "\n"
 
-test = { "spam" => [ "a", "b" ] } 
+# test = { "spam" => [ "a", "b" ] } 
 
-puts "Dictionary encode test: " + test.bencode + "\n"
+# puts "Dictionary encode test: " + test.bencode + "\n"
 
-test = test.bencode
+# test = test.bencode
 
-puts "Dictionary decode test: " + Bencode.decode(test).to_s + "\n"
+# puts "Dictionary decode test: " + Bencode.decode(test).to_s + "\n"
 

@@ -1,2 +1,4 @@
 BitTorrent-Ruby
 ===============
+Deonna, Ankeet
+

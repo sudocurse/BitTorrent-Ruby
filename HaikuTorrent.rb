@@ -8,7 +8,8 @@ if __FILE__ == $PROGRAM_NAME
         torrent = Torrent.open(ARGV[0])
         puts "======\nhello and welcome"
         puts "to the only bittorrent"
-        puts "client we\'ve written\n======\n"
+        puts "client we\'ve written\n======"
+        puts "\nOpening #{ARGV[0]}:"
         torrent.decoded_data.each{ |key, val|
             if key == "info" # info dictionary
                 puts "info =>"

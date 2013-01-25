@@ -1,5 +1,6 @@
 require_relative 'bencode.rb'
 require_relative 'torrent.rb'
+require_relative 'tracker.rb'
 
 if __FILE__ == $PROGRAM_NAME    
     if ARGV.length < 1
@@ -36,4 +37,30 @@ if __FILE__ == $PROGRAM_NAME
         # ['announce']
         #puts torrent.bencoded_data
     end
+
+    if torrent
+        # initialize a TrackerHandler object
+        options = {:tracker_timeout => 5, :port => 42309}
+        handler = Tracker.new(Torrent.open(ARGV[0]), options)
+                                   
+
+        # get list of available trackers (as an array)
+        trackers = handler.trackers
+
+        # establish connection to tracker from index of a tracker
+        # from the above 'trackers' array
+        success = handler.establish_connection 0
+        connected_tracker = handler.connected_trackers.last
+
+        # send request to a connected tracker
+        if success
+            puts "SUCCESS"
+            response = handler.request( :uploaded => 1, :downloaded => 10,
+                      :left => 100, :compact => 0,
+                      :no_peer_id => 0, :event => 'started',
+                      :index => 0)
+        end
+    end
 end
+
+

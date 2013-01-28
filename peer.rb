@@ -1,8 +1,8 @@
 require_relative 'bencode.rb'
 
 class Peer 
-	#create a peer
-	def initialize address, port
+    #create a peer
+    def initialize address, port
         @address = address
         @port = port
         @state = 0b1010 
@@ -10,9 +10,9 @@ class Peer
         # @state[1] = am interested
         # @state[2] = peer choking
         # @state[3] = peer interested
-	end
+    end
 
-	attr_reader :address, :state
+    attr_reader :address, :state
 end
 
 #test with an actual .torrent file to see if the code works

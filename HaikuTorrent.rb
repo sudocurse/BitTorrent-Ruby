@@ -1,6 +1,6 @@
 require_relative 'bencode.rb'
 require_relative 'torrent.rb'
-require_relative 'tracker.rb'
+require_relative 'connect.rb'
 require_relative 'peer.rb'
 require 'socket'
 
@@ -37,7 +37,7 @@ def print_metadata(torrent)
             puts "info =>"
             val.each{   |info_key, info_val|
                 if info_key == "pieces"
-                    puts "\t#{info_val.class()}\t#{info_val.length()}"
+                    #puts "\t#{info_val.}"
                     puts "\tSkipping pieces."
                 elsif info_key == "files"
                     puts "\tFiles:"
@@ -64,6 +64,15 @@ def handshake(peer, info_hash)
     sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
     sock.send info_hash+@my_id
 end
+
+def send_keep_alive
+
+end
+
+def send_choke
+
+end
+
 
 if __FILE__ == $PROGRAM_NAME    
 
@@ -95,7 +104,7 @@ if __FILE__ == $PROGRAM_NAME
     if torrent
         # initialize a TrackerHandler object
         options = {:tracker_timeout => 5, :port => 42309}
-        handler = Tracker.new(Torrent.open(ARGV[0]), options)
+        handler = Tracker.new(torrent, options)
                                    
 
         # get list of available trackers (as an array)
@@ -111,7 +120,8 @@ if __FILE__ == $PROGRAM_NAME
             puts "SUCCESS"
             response = handler.request( :uploaded => 1, :downloaded => 10,
                       :left => 100, :compact => 0,
-                      :no_peer_id => 0, :event => 'started',
+                      :no_peer_id => 0, :event => 'started', 
+                      #:peer_id => $my_id, :info_hash = torrent.info_hash
                       :index => 0)
         end
     end

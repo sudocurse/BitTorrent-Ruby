@@ -1,4 +1,5 @@
-require_relative 'bencode.rb'
+#require_relative 'bencode.rb'
+require 'bencode'
 
 class Peer 
     #create a peer

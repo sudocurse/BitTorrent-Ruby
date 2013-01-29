@@ -1,5 +1,6 @@
 require 'digest/sha1'
-require_relative 'bencode.rb'
+#require_relative 'bencode.rb'
+require 'bencode'
 
 class Torrent
     #create/bencode a new Torrent file
@@ -12,8 +13,9 @@ class Torrent
     def self.open to_open
         file = File.open(to_open, "rb")
         @bencoded_data = file.read.strip
-        @decoded_data = Bencode.decode(@bencoded_data)
-        @decoded_data["info_hash"] = Digest::SHA1.hexdigest(@decoded_data["info"].bencode)
+        @decoded_data = BEncode.load(@bencoded_data)
+        puts "\nhex form of hash:" + Digest::SHA1.hexdigest(@decoded_data["info"].bencode)
+        @decoded_data["info_hash"] = Digest::SHA1.digest(@decoded_data["info"].bencode).force_encoding('binary')
         Torrent.new @decoded_data
     end
 

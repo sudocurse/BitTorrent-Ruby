@@ -2,6 +2,7 @@ require_relative 'bencode.rb'
 require_relative 'torrent.rb'
 require_relative 'connect.rb'
 require_relative 'peer.rb'
+require_relative 'tracker.rb'
 require 'socket'
 
 $version = "HT0001"
@@ -102,27 +103,29 @@ if __FILE__ == $PROGRAM_NAME
     print_metadata torrent
 
     if torrent
-        # initialize a TrackerHandler object
-        options = {:tracker_timeout => 5, :port => 42309}
-        handler = Tracker.new(torrent, options)
+        #initialize a Tracker object
+        options = {:timeout => 5}
+        connection = Tracker.new(torrent, options)
                                    
 
-        # get list of available trackers (as an array)
-        trackers = handler.trackers
+        #array of available trackers
+        trackers = connection.trackers
+        #connect to first tracker in the list
+        success = connection.connect_to_tracker 0
+        connected_tracker = connection.successful_trackers.last
 
-        # establish connection to tracker from index of a tracker
-        # from the above 'trackers' array
-        success = handler.establish_connection 0
-        connected_tracker = handler.connected_trackers.last
 
-        # send request to a connected tracker
+        #make a request to a successfully connected tracker
         if success
             puts "SUCCESS"
-            response = handler.request( :uploaded => 1, :downloaded => 10,
+
+            response = connection.make_tracker_request( :uploaded => 1, :downloaded => 10,
                       :left => 100, :compact => 0,
                       :no_peer_id => 0, :event => 'started', 
                       #:peer_id => $my_id, :info_hash = torrent.info_hash
                       :index => 0)
+
+            puts "RESPONSE: " + response.to_s
         end
     end
 

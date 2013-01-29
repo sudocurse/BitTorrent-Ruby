@@ -113,7 +113,7 @@ class Tracker
 		    raise Exception, "connection not made" if connection.nil?
 		    
 		    #actually make the request 
-		    tracker_response = connection.make_tracker_request(Net::HTTP::Get.new request_str)
+		    tracker_response = connection.request(Net::HTTP::Get.new request_str)
 
 		    Hash[:body => tracker_response.body, :code => tracker_response.code]
 	end

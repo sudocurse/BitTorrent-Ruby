@@ -3,6 +3,7 @@ require_relative 'torrent.rb'
 require_relative 'connect.rb'
 require_relative 'peer.rb'
 require_relative 'tracker.rb'
+require_relative 'message.rb'
 require 'socket'
 
 $version = "HT0001"
@@ -61,19 +62,11 @@ end
 
 #establish a connection
 def handshake(peer, info_hash)
-    s = TCPSocket.new peer.address, peer.port 
+    sock = TCPSocket.new peer.address, peer.port 
     sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
     sock.send info_hash+@my_id
+    sock
 end
-
-def send_keep_alive
-
-end
-
-def send_choke
-
-end
-
 
 if __FILE__ == $PROGRAM_NAME    
 
@@ -128,30 +121,14 @@ if __FILE__ == $PROGRAM_NAME
             puts "RESPONSE: " + response.to_s
         end
     end
-
-#    peerlist = Hash.new(1010)
-#    peerlist[""]
-
-    # client should listen on port
-    # from these initial states, once the client is interested, 
-    # it should set up a handshake
-
-    # have to figure out the proper way to SHA-1 the info key in the torrent
-    # put that into initialize?
-
-    # handshake( peerlist["some address"] , torrent.info_hash)
     
-    # message format = <length><ID><payload>
-# fixed length messages:
-# choke: <len=0001><id=0>
-# unchoke: <len=0001><id=1>
-# interested: <len=0001><id=2>
-# not interested: <len=0001><id=3>
-# have: <len=0005><id=4><piece index>
+    # peerlist = Hash.new(1010)
+    # for each peer in response, add peerlist[""]
+    # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
 
-# var length:
-# bitfield, request, piece, cancel, port
-# http://wiki.theory.org/BitTorrentSpecification#Peer_wire_protocol_.28TCP.29
+    # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
+    # peer_socket.send Message.new(:bitfield, bitfield)
+
 end
 
 

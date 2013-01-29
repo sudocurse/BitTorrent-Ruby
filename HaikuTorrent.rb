@@ -1,4 +1,5 @@
-require_relative 'bencode.rb'
+#require_relative 'bencode.rb'
+require 'bencode'
 require_relative 'torrent.rb'
 require_relative 'connect.rb'
 require_relative 'peer.rb'
@@ -15,16 +16,19 @@ def generate_my_id
 end
 
 def parse_config(config_file)
+
     if File.exist?(config_file)
+
         encoded =  File.open(config_file, "rb").read.strip
-        config = Bencode.decode(encoded)
+        config = BEncode.load(encoded)
         $my_id = config['my_id']
-        puts $my_id
+
     elsif config_file == "config"
+
         puts "Default config file not found."
+
         $my_id = generate_my_id
-        # this will probably eventually be put into an array 
-        # with other config options
+        
         File.open(config_file, "wb") do |f|
             f.write($my_id.bencode + "\n")
         end
@@ -39,7 +43,6 @@ def print_metadata(torrent)
             puts "info =>"
             val.each{   |info_key, info_val|
                 if info_key == "pieces"
-                    #puts "\t#{info_val.}"
                     puts "\tSkipping pieces."
                 elsif info_key == "files"
                     puts "\tFiles:"
@@ -129,6 +132,7 @@ if __FILE__ == $PROGRAM_NAME
     # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
     # peer_socket.send Message.new(:bitfield, bitfield)
 
-end
+    # find a piece that you don't have at random, and then download it.
 
+end
 

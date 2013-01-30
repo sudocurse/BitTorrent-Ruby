@@ -11,8 +11,9 @@ $version = "HT0001"
 $my_id = "" 
 $pstr = "BitTorrent protocol"
 
+#we chose to use the current time for the string
 def generate_my_id 
-    return "-"+$version+"-"+"%12d" % rand(999999999999).to_s
+    return "-"+$version+"-"+"%12d" % (Time.now.hash/1000000).to_s
 end
 
 def parse_config(config_file)
@@ -23,7 +24,7 @@ def parse_config(config_file)
         config = BEncode.load(encoded)
         $my_id = config['my_id']
 
-    elsif config_file == "config"
+    elsif config_file == ".config"
 
         puts "Default config file not found."
 
@@ -67,7 +68,7 @@ end
 def handshake(peer, info_hash)
     sock = TCPSocket.new peer.address, peer.port 
     sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
-    sock.send info_hash+@my_id
+    sock.send info_hashi + $my_id
     sock
 end
 
@@ -100,9 +101,8 @@ if __FILE__ == $PROGRAM_NAME
 
     if torrent
         #initialize a Tracker object
-        options = {:timeout => 5}
+        options = {:timeout => 5, :peer_id => $my_id}
         connection = Tracker.new(torrent, options)
-                                   
 
         #array of available trackers
         trackers = connection.trackers
@@ -118,12 +118,12 @@ if __FILE__ == $PROGRAM_NAME
             response = connection.make_tracker_request( :uploaded => 1, :downloaded => 10,
                       :left => 100, :compact => 0,
                       :no_peer_id => 0, :event => 'started', 
-                      #:peer_id => $my_id, :info_hash = torrent.info_hash
                       :index => 0)
 
             puts "RESPONSE: " + response.to_s
         end
-    end
+
+    
     
     # peerlist = Hash.new(1010)
     # for each peer in response, add peerlist[""]
@@ -134,5 +134,6 @@ if __FILE__ == $PROGRAM_NAME
 
     # find a piece that you don't have at random, and then download it.
 
+    end
 end
 

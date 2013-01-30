@@ -23,7 +23,6 @@ def parse_config(config_file)
         encoded =  File.open(config_file, "rb").read.strip
         config = BEncode.load(encoded)
         $my_id = config['my_id']
-        puts "we have this id now yay #{$my_id}" 
 
     elsif config_file == ".config"
 
@@ -59,6 +58,8 @@ def print_metadata(torrent)
                     puts "\t#{info_key} => #{info_val}"
                 end
             }
+        elsif key =="info_hash"
+            next
         elsif   #Announce URL and any other metadata
             puts "#{key} => #{val}"
         end
@@ -98,11 +99,14 @@ if __FILE__ == $PROGRAM_NAME
 
     puts "Opening #{torrent_file}:"
     torrent = Torrent.open(torrent_file)
-    print_metadata torrent
 
     if torrent
-        #initialize a Tracker object
-        puts "hey here's the id +++++ #{$my_id}"
+
+        puts "Parsed torrent metadata."
+        #print_metadata torrent
+
+        # initialize a Tracker object
+        puts "\nGetting tracker updates."
         options = {:timeout => 5, :peer_id => $my_id}
         connection = Tracker.new(torrent, options)
 
@@ -113,7 +117,7 @@ if __FILE__ == $PROGRAM_NAME
         connected_tracker = connection.successful_trackers.last
 
 
-        #make a request to a successfully connected tracker
+        # make a request to a successfully connected tracker
         if success
             puts "SUCCESS"
 
@@ -122,20 +126,39 @@ if __FILE__ == $PROGRAM_NAME
                       :no_peer_id => 0, :event => 'started', 
                       :index => 0)
 
-            puts "RESPONSE: " + response.to_s
+            #puts "RESPONSE: " + response.to_s
+            resp_d = response[:body].bdecode
+            puts "Response Keys:" + resp_d.keys.to_s
+            
+            num_seeders = resp_d['complete']
+            puts "Seeders: #{num_seeders}"
+            
+            num_leechers = resp_d['incomplete']
+            puts "Leechers: #{num_leechers}"
+
+            # interval in seconds we should wait before sending requests
+            interval = resp_d['interval']
+            puts "Interval: #{interval}"
+            
+            # peer dictionary. according to the spec, the tracker might return a non-dictionary model? hooray
+            peers = resp_d['peers'].unpack('H*') # capital H unpacks a big-endian binary string into hex
+            puts "Peers: #{peers}"
+
+            # peerlist = Hash.new(1010)
+            # for each peer in response, add peerlist[""]
+            # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
+
+            # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
+            # peer_socket.send Message.new(:bitfield, bitfield)
+
+            # find a piece that you don't have at random, and then download it.
+
+        elsif
+            puts "Could not connect to tracker."
+            # Perhaps we should try again soon. 
         end
-
-    
-    
-    # peerlist = Hash.new(1010)
-    # for each peer in response, add peerlist[""]
-    # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
-
-    # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
-    # peer_socket.send Message.new(:bitfield, bitfield)
-
-    # find a piece that you don't have at random, and then download it.
-
+    elsif 
+        puts "Torrent could not be opened."
     end
 end
 

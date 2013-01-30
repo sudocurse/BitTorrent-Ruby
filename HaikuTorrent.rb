@@ -70,7 +70,7 @@ end
 def handshake(peer, info_hash)
     sock = TCPSocket.new peer.address, peer.port 
     sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
-    sock.send info_hashi + $my_id
+    sock.send info_hash + $my_id
     sock
 end
 

@@ -11,26 +11,27 @@ $version = "HT0001"
 $my_id = "" 
 $pstr = "BitTorrent protocol"
 
+#we chose to use the current time for the string
 def generate_my_id 
-    return "-"+$version+"-"+"%12d" % rand(999999999999).to_s
+    return "-"+$version+"-"+"%12d" % (Time.now.hash % 1000000000000).to_s
 end
 
 def parse_config(config_file)
 
     if File.exist?(config_file)
-
+        
         encoded =  File.open(config_file, "rb").read.strip
         config = BEncode.load(encoded)
         $my_id = config['my_id']
 
-    elsif config_file == "config"
+    elsif config_file == ".config"
 
-        puts "Default config file not found."
+        puts "Default config file not found. Creating .config."
 
         $my_id = generate_my_id
         
         File.open(config_file, "wb") do |f|
-            f.write($my_id.bencode + "\n")
+            f.write({'my_id' => $my_id}.bencode + "\n")
         end
     elsif
         abort("Error: Config file not found. Exiting.")
@@ -57,17 +58,47 @@ def print_metadata(torrent)
                     puts "\t#{info_key} => #{info_val}"
                 end
             }
+        elsif key =="info_hash"
+            next
         elsif   #Announce URL and any other metadata
             puts "#{key} => #{val}"
         end
     }
 end
 
+def parse_tracker_response response
+    resp_d = response[:body].bdecode
+    puts "Response Keys:" + resp_d.keys.to_s
+    
+    num_seeders = resp_d['complete']
+    puts "Seeders: #{num_seeders}"
+    
+    num_leechers = resp_d['incomplete']
+    puts "Leechers: #{num_leechers}"
+
+    # interval in seconds we should wait before sending requests
+    interval = resp_d['interval']
+    puts "Interval: #{interval}"
+    
+    # peer list. i assume if this comes in dictionary form, bencode will already have handled it.
+    # so ubuntu is binary data.
+    peers = resp_d['peers'] #.unpack('H*') # capital H unpacks a big-endian binary string into hex
+    peerlist = Hash.new()
+
+    # just trying to parse through everything. it's a start. 
+    until peers == ""                 # "om nom nom nom"
+        addr = peers.unpack("H8H4") 
+        peers = peers[6, peers.length] # " nom nom"
+        peerlist[addr[0]] = addr[1] 
+    end
+    peerlist
+end
+
 #establish a connection
 def handshake(peer, info_hash)
     sock = TCPSocket.new peer.address, peer.port 
     sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
-    sock.send info_hash+@my_id
+    sock.send info_hash + $my_id
     sock
 end
 
@@ -86,23 +117,23 @@ if __FILE__ == $PROGRAM_NAME
         torrent_file = ARGV[1]
     end
 
-
-    puts "======\nhello and welcome"
-    puts "to the only bittorrent"
-    puts "client we\'ve written\n======"
+    puts "======\nhello and welcome\nto the only bittorrent\nclient we\'ve written\n======"
 
     puts "\nUsing config file #{config_file}"
     parse_config config_file
 
     puts "Opening #{torrent_file}:"
     torrent = Torrent.open(torrent_file)
-    print_metadata torrent
 
     if torrent
-        #initialize a Tracker object
-        options = {:timeout => 5}
+
+        puts "Parsed torrent metadata."
+        #print_metadata torrent
+
+        # initialize a Tracker object
+        puts "\nGetting tracker updates."
+        options = {:timeout => 5, :peer_id => $my_id}
         connection = Tracker.new(torrent, options)
-                                   
 
         #array of available trackers
         trackers = connection.trackers
@@ -111,28 +142,35 @@ if __FILE__ == $PROGRAM_NAME
         connected_tracker = connection.successful_trackers.last
 
 
-        #make a request to a successfully connected tracker
+        # make a request to a successfully connected tracker
         if success
             puts "SUCCESS"
 
             response = connection.make_tracker_request( :uploaded => 1, :downloaded => 10,
                       :left => 100, :compact => 0,
                       :no_peer_id => 0, :event => 'started', 
-                      #:peer_id => $my_id, :info_hash = torrent.info_hash
                       :index => 0)
 
             puts "RESPONSE: " + response.to_s
+            peerlist = parse_tracker_response response
+
+            puts "Peers:"
+            puts peerlist
+
+            # select a peer
+            # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
+
+            # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
+            # peer_socket.send Message.new(:bitfield, bitfield)
+
+            # find a piece that you don't have at random, and then download it.
+
+        elsif
+            puts "Could not connect to tracker."
+            # Perhaps we should try again soon. 
         end
+    elsif 
+        puts "Torrent could not be opened."
     end
-    
-    # peerlist = Hash.new(1010)
-    # for each peer in response, add peerlist[""]
-    # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
-
-    # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
-    # peer_socket.send Message.new(:bitfield, bitfield)
-
-    # find a piece that you don't have at random, and then download it.
-
 end
 

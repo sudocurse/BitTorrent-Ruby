@@ -13,25 +13,26 @@ $pstr = "BitTorrent protocol"
 
 #we chose to use the current time for the string
 def generate_my_id 
-    return "-"+$version+"-"+"%12d" % (Time.now.hash/1000000).to_s
+    return "-"+$version+"-"+"%12d" % (Time.now.hash % 1000000000000).to_s
 end
 
 def parse_config(config_file)
 
     if File.exist?(config_file)
-
+        
         encoded =  File.open(config_file, "rb").read.strip
         config = BEncode.load(encoded)
         $my_id = config['my_id']
+        puts "we have this id now yay #{$my_id}" 
 
     elsif config_file == ".config"
 
-        puts "Default config file not found."
+        puts "Default config file not found. Creating .config."
 
         $my_id = generate_my_id
         
         File.open(config_file, "wb") do |f|
-            f.write($my_id.bencode + "\n")
+            f.write({'my_id' => $my_id}.bencode + "\n")
         end
     elsif
         abort("Error: Config file not found. Exiting.")
@@ -101,6 +102,7 @@ if __FILE__ == $PROGRAM_NAME
 
     if torrent
         #initialize a Tracker object
+        puts "hey here's the id +++++ #{$my_id}"
         options = {:timeout => 5, :peer_id => $my_id}
         connection = Tracker.new(torrent, options)
 

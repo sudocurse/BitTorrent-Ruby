@@ -66,6 +66,34 @@ def print_metadata(torrent)
     }
 end
 
+def parse_tracker_response response
+    resp_d = response[:body].bdecode
+    puts "Response Keys:" + resp_d.keys.to_s
+    
+    num_seeders = resp_d['complete']
+    puts "Seeders: #{num_seeders}"
+    
+    num_leechers = resp_d['incomplete']
+    puts "Leechers: #{num_leechers}"
+
+    # interval in seconds we should wait before sending requests
+    interval = resp_d['interval']
+    puts "Interval: #{interval}"
+    
+    # peer list. i assume if this comes in dictionary form, bencode will already have handled it.
+    # so ubuntu is binary data.
+    peers = resp_d['peers'] #.unpack('H*') # capital H unpacks a big-endian binary string into hex
+    peerlist = Hash.new()
+
+    # just trying to parse through everything. it's a start. 
+    until peers == ""                 # "om nom nom nom"
+        addr = peers.unpack("H8H4") 
+        peers = peers[6, peers.length] # " nom nom"
+        peerlist[addr[0]] = addr[1] 
+    end
+    peerlist
+end
+
 #establish a connection
 def handshake(peer, info_hash)
     sock = TCPSocket.new peer.address, peer.port 
@@ -89,10 +117,7 @@ if __FILE__ == $PROGRAM_NAME
         torrent_file = ARGV[1]
     end
 
-
-    puts "======\nhello and welcome"
-    puts "to the only bittorrent"
-    puts "client we\'ve written\n======"
+    puts "======\nhello and welcome\nto the only bittorrent\nclient we\'ve written\n======"
 
     puts "\nUsing config file #{config_file}"
     parse_config config_file
@@ -126,26 +151,13 @@ if __FILE__ == $PROGRAM_NAME
                       :no_peer_id => 0, :event => 'started', 
                       :index => 0)
 
-            #puts "RESPONSE: " + response.to_s
-            resp_d = response[:body].bdecode
-            puts "Response Keys:" + resp_d.keys.to_s
-            
-            num_seeders = resp_d['complete']
-            puts "Seeders: #{num_seeders}"
-            
-            num_leechers = resp_d['incomplete']
-            puts "Leechers: #{num_leechers}"
+            puts "RESPONSE: " + response.to_s
+            peerlist = parse_tracker_response response
 
-            # interval in seconds we should wait before sending requests
-            interval = resp_d['interval']
-            puts "Interval: #{interval}"
-            
-            # peer dictionary. according to the spec, the tracker might return a non-dictionary model? hooray
-            peers = resp_d['peers'].unpack('H*') # capital H unpacks a big-endian binary string into hex
-            puts "Peers: #{peers}"
+            puts "Peers:"
+            puts peerlist
 
-            # peerlist = Hash.new(1010)
-            # for each peer in response, add peerlist[""]
+            # select a peer
             # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
 
             # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 

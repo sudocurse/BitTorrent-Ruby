@@ -67,7 +67,7 @@ end
 
 def parse_tracker_response response
     resp_d = response[:body].bdecode
-    puts "Response Keys:" + resp_d.keys.to_s
+    # puts "Response Keys:" + resp_d.keys.to_s #response keys. useful for unhandled response cases
     
     # interval in seconds we should wait before sending requests
     num_seeders = resp_d['complete']
@@ -95,7 +95,17 @@ end
 def handshake(peer, info_hash)
     sock = TCPSocket.new peer.address, peer.port 
     sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
-    sock.send info_hash + $my_id
+    sock.send (info_hash + $my_id),0
+
+    # recving handshake. might want to make these peer attributes.
+    ln = sock.recv(1).to_i
+    puts "Response: this better be 19: #{ln}"
+    prot = sock.recv(19)
+    options = sock.recv(8)
+    their_hash = sock.recv(20)
+    puts their_hash.unpack("H*")
+    their_id = sock.recv(20)
+    puts their_id
     sock
 end
 
@@ -135,7 +145,7 @@ if __FILE__ == $PROGRAM_NAME
 
         #array of available trackers
         trackers = connection.trackers
-        puts "Getting tracker updates from #{trackers}."
+#        puts "Getting tracker updates from #{trackers}."  #debug tracker info
 
         #connect to first tracker in the list
         success = connection.connect_to_tracker 0
@@ -154,17 +164,33 @@ if __FILE__ == $PROGRAM_NAME
             peerlist = parse_tracker_response response
 
             puts "Peers (#{peerlist.length}):"
-            puts peerlist
+            puts peerlist   #debug - prints peerlist
 
-            # select a peer
-            other_client = "129.2.129.82" 
+            
+
+            # select a peer somehow
+            other_client = "127.0.0.1"
+            lhost = Peer.new "127.0.0.1", 52042
+            peerlist += [lhost]
+            
+            # other_client = "209.234.249.226"
             i = peerlist.find_index {|x| x.address ==  other_client}
             puts "Sending handshake to client at #{other_client} (def. in line 160)"
-            peer_socket = handshake( peerlist[i] , torrent.info_hash)   #receive handshake?
-            puts "Waiting for response"
-            ln = peer_socket.recv(1)
-            puts "This better be 19 #{ln}"
+    
+            # probably should make this a thread or otherwise non-blocking
+            peer_socket = handshake( peerlist[i] , torrent.info_hash)  
 
+            ln = peer_socket.recv(4).unpack("C*").join.to_i #bitfield length
+            puts "Message length: #{ln}"
+            #perhaps the message class should deal with such things
+            id = peer_socket.recv(1).unpack("C*")[0]
+            if id == 5
+                puts "receiving #{other_client}'s bitfield:"
+                their_bitfield = peer_socket.recv(ln.to_i - 2)
+                puts "Peer's bitfield: #{their_bitfield.unpack('H*')}"
+            elsif
+                puts "Error: expected bitfield. Didn't get a bitfield. :("
+            end 
             # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
             # peer_socket.send Message.new(:bitfield, bitfield)
 

@@ -1,11 +1,12 @@
 #require_relative 'bencode.rb'
 require 'bencode'
+require 'ipaddr'
+require 'socket'
 require_relative 'torrent.rb'
 require_relative 'connect.rb'
 require_relative 'peer.rb'
 require_relative 'tracker.rb'
 require_relative 'message.rb'
-require 'socket'
 
 $version = "HT0001"
 $my_id = "" 
@@ -58,8 +59,6 @@ def print_metadata(torrent)
                     puts "\t#{info_key} => #{info_val}"
                 end
             }
-        elsif key =="info_hash"
-            next
         elsif   #Announce URL and any other metadata
             puts "#{key} => #{val}"
         end
@@ -70,26 +69,24 @@ def parse_tracker_response response
     resp_d = response[:body].bdecode
     puts "Response Keys:" + resp_d.keys.to_s
     
-    num_seeders = resp_d['complete']
-    puts "Seeders: #{num_seeders}"
-    
-    num_leechers = resp_d['incomplete']
-    puts "Leechers: #{num_leechers}"
-
     # interval in seconds we should wait before sending requests
+    num_seeders = resp_d['complete']
+    num_leechers = resp_d['incomplete']
     interval = resp_d['interval']
-    puts "Interval: #{interval}"
+    puts "\nSeeders: #{num_seeders}\tLeechers: #{num_leechers}\tInterval: #{interval}"
     
-    # peer list. i assume if this comes in dictionary form, bencode will already have handled it.
-    # so ubuntu is binary data.
-    peers = resp_d['peers'] #.unpack('H*') # capital H unpacks a big-endian binary string into hex
-    peerlist = Hash.new()
+    # peerlist. i assume if this comes in dictionary form, bencode will already have handled it.
 
-    # just trying to parse through everything. it's a start. 
-    until peers == ""                 # "om nom nom nom"
-        addr = peers.unpack("H8H4") 
-        peers = peers[6, peers.length] # " nom nom"
-        peerlist[addr[0]] = addr[1] 
+    peers = resp_d['peers'] 
+    peerlist = Array.new
+    # puts peers.unpack("H*")   #debug peerlist
+    until peers == ""                
+        ip = peers.unpack("C4").join(".")   # grabs the 4 leftmost 8bit unsigneds from peers
+        peers = peers[4, peers.length]      # chops the contents of addr off of peers
+        port = peers.unpack("n").join       # grabs the leftmost 16-bit big-endian from peers
+        peers = peers[2, peers.length]      # chops the contents of addr off of peers
+        p = Peer.new( ip, port.to_s )   
+        peerlist += [p]
     end
     peerlist
 end
@@ -117,26 +114,29 @@ if __FILE__ == $PROGRAM_NAME
         torrent_file = ARGV[1]
     end
 
-    puts "======\nhello and welcome\nto the only bittorrent\nclient we\'ve written\n======"
+    puts "\n\t======"
+    puts "\thello and welcome"
+    puts "\tto the only bittorrent"
+    puts "\tclient we\'ve written"
+    puts "\t======"
 
     puts "\nUsing config file #{config_file}"
     parse_config config_file
-
-    puts "Opening #{torrent_file}:"
     torrent = Torrent.open(torrent_file)
 
     if torrent
 
-        puts "Parsed torrent metadata."
-        #print_metadata torrent
+        puts "Parsed torrent metadata for #{torrent_file}."
+        #print_metadata torrent     #debug prints torrent metadata
 
         # initialize a Tracker object
-        puts "\nGetting tracker updates."
         options = {:timeout => 5, :peer_id => $my_id}
         connection = Tracker.new(torrent, options)
 
         #array of available trackers
         trackers = connection.trackers
+        puts "Getting tracker updates from #{trackers}."
+
         #connect to first tracker in the list
         success = connection.connect_to_tracker 0
         connected_tracker = connection.successful_trackers.last
@@ -144,21 +144,26 @@ if __FILE__ == $PROGRAM_NAME
 
         # make a request to a successfully connected tracker
         if success
-            puts "SUCCESS"
 
             response = connection.make_tracker_request( :uploaded => 1, :downloaded => 10,
                       :left => 100, :compact => 0,
                       :no_peer_id => 0, :event => 'started', 
                       :index => 0)
 
-            puts "RESPONSE: " + response.to_s
+            #puts "RESPONSE: " + response.to_s      # debug - prints tracker response
             peerlist = parse_tracker_response response
 
-            puts "Peers:"
+            puts "Peers (#{peerlist.length}):"
             puts peerlist
 
             # select a peer
-            # peer_socket = handshake( peerlist["some address"] , torrent.info_hash)   #receive handshake?
+            other_client = "129.2.129.82" 
+            i = peerlist.find_index {|x| x.address ==  other_client}
+            puts "Sending handshake to client at #{other_client} (def. in line 160)"
+            peer_socket = handshake( peerlist[i] , torrent.info_hash)   #receive handshake?
+            puts "Waiting for response"
+            ln = peer_socket.recv(1)
+            puts "This better be 19 #{ln}"
 
             # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
             # peer_socket.send Message.new(:bitfield, bitfield)

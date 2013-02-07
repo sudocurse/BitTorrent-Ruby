@@ -13,7 +13,11 @@ class Peer
         # @state[3] = peer interested
     end
 
-    attr_reader :address, :state
+    def to_s
+        @address + ":" + @port   
+    end
+
+    attr_reader :address, :state, :port
 end
 
 #test with an actual .torrent file to see if the code works

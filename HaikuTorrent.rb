@@ -191,10 +191,16 @@ if __FILE__ == $PROGRAM_NAME
             elsif
                 puts "Error: expected bitfield. Didn't get a bitfield. :("
             end 
-            # bitfield[:bitfield] = "\0\0\0\0\0\0" #(should this of a length equal to the number of pieces?) 
+
+            # if own bitfield != \0\0\0...
+            # bitfield[:bitfield] = "" #(should this of a length equal to the number of pieces? probably should be stored in .config on a per-torrent setting?)
             # peer_socket.send Message.new(:bitfield, bitfield)
 
             # find a piece that you don't have at random, and then download it.
+            # strategically, you could open up threads with a large number of peers, figure out with pieces are more rare and request those (rarest first)
+                # is this also the step that figures out how to unchoke/sends an interest message?
+            # to request a piece, figure out the index from the bitfield, and send a request message. 
+            #begin receiving piece messages. once verified(?), send a 'have' message- (out to all peers, or just that one?)
 
         elsif
             puts "Could not connect to tracker."

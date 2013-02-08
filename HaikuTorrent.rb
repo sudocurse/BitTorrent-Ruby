@@ -128,6 +128,10 @@ def handshake(peer, info_hash)
 end
 
 def handle_messages peer_socket, torrent
+    if peer_socket == nil
+        puts "Client can't be reached or isn't talking about that torrent."
+        return 
+    end
     ln = peer_socket.recv(4).unpack("C*").join.to_i #bitfield length
     puts "Message length: #{ln}"
     if ln > 0
@@ -233,7 +237,7 @@ if __FILE__ == $PROGRAM_NAME
             
             # other_client = "209.234.249.226"
             i = peerlist.find_index {|x| x.address ==  other_client}
-            puts "Sending handshake to client at #{other_client} (def. in line 160)"
+            puts "Sending handshake to client at #{lhost} (def. in code at ~line 232)"
     
             # probably should make this a thread or otherwise non-blocking
             peer_socket = handshake( peerlist[i] , torrent.info_hash)  

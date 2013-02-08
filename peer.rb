@@ -14,7 +14,7 @@ class Peer
     end
 
     def to_s
-        @address + ":" + @port   
+        @address.to_s + ":" + @port.to_s
     end
 
     attr_reader :address, :state, :port

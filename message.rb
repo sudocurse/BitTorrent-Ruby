@@ -31,6 +31,14 @@ class Message
             (9 + @params[:block].length).to_be + ID_LIST.index[@id].chr + @params[:index].to_be + @params[:begin].to_be + @params[:block]
         end
     end
+
+    def self.from_peer id
+        if ID_LIST.length < id
+            return :error
+        else 
+            return ID_LIST.index(id)
+        end
+    end
 end
 
 # m = Message.new(:request)

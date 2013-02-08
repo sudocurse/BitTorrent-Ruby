@@ -34,6 +34,7 @@ class Torrent
     end
 
     attr_reader :decoded_data, :bencoded_data, :info_hash
+    attr_accessor :bitfield
 end
 
 #test with an actual .torrent file to see if the code works

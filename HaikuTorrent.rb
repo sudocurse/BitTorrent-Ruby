@@ -3,40 +3,52 @@ require 'bencode'
 require 'ipaddr'
 require 'socket'
 require_relative 'torrent.rb'
-require_relative 'connect.rb'
 require_relative 'peer.rb'
 require_relative 'tracker.rb'
 require_relative 'message.rb'
 
-$version = "HT0001"
+$version = "HT0002"
 $my_id = "" 
 $pstr = "BitTorrent protocol"
+$config_file = ""
 
 #we chose to use the current time for the string
 def generate_my_id 
     return "-"+$version+"-"+"%12d" % (Time.now.hash % 1000000000000).to_s
 end
 
-def parse_config(config_file)
+def parse_config_file 
 
-    if File.exist?(config_file)
+    config = Hash.new
+
+    if File.exist?($config_file) #if either .config or the user defined config file exists:
         
-        encoded =  File.open(config_file, "rb").read.strip
+        encoded =  File.open($config_file, "rb").read.strip
         config = BEncode.load(encoded)
         $my_id = config['my_id']
 
-    elsif config_file == ".config"
-
+    elsif $config_file == ".config" # if not, and there's no user supplied string
         puts "Default config file not found. Creating .config."
-
-        $my_id = generate_my_id
         
-        File.open(config_file, "wb") do |f|
-            f.write({'my_id' => $my_id}.bencode + "\n")
-        end
-    elsif
+        $my_id = generate_my_id
+        config['my_id'] =  $my_id
+        save config
+
+    else
         abort("Error: Config file not found. Exiting.")
     end
+
+    config
+end
+
+def update config, torrent
+    config[torrent.info_hash] = torrent.bitfield
+end
+
+def save config 
+        File.open($config_file, "wb") do |f|
+            f.write(config.bencode + "\n")
+        end
 end
 
 def print_metadata(torrent)
@@ -59,7 +71,7 @@ def print_metadata(torrent)
                     puts "\t#{info_key} => #{info_val}"
                 end
             }
-        elsif   #Announce URL and any other metadata
+        else   #Announce URL and any other metadata
             puts "#{key} => #{val}"
         end
     }
@@ -98,20 +110,47 @@ def handshake(peer, info_hash)
     sock.send (info_hash + $my_id),0
 
     # recving handshake. might want to make these peer attributes.
-    ln = sock.recv(1).to_i
-    puts "Response: this better be 19: #{ln}"
+    ln = sock.recv(1).unpack("C*")[0].to_i #to_i
+    
+    if ln != 19
+        puts "Response length : #{ln}"
+        return
+    end 
+
     prot = sock.recv(19)
     options = sock.recv(8)
     their_hash = sock.recv(20)
     puts their_hash.unpack("H*")
     their_id = sock.recv(20)
     puts their_id
+    
     sock
+end
+
+def handle_messages peer_socket, torrent
+    ln = peer_socket.recv(4).unpack("C*").join.to_i #bitfield length
+    puts "Message length: #{ln}"
+    if ln > 0
+        id = peer_socket.recv(1).unpack("C*")[0]
+        rcvd_message = Message.from_peer id
+        puts rcvd_message
+        #perhaps the message class should deal with such things
+        if id == 5
+            their_bitfield = peer_socket.recv((ln.to_i - 1))
+            puts "Peer's bitfield (#{their_bitfield.length }):\n#{their_bitfield.unpack("H*")}"
+            puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.unpack('H*')}"
+            puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
+        else
+            puts "Error: expected bitfield. Didn't get a bitfield. :("
+        end 
+    else
+        puts "Keep alive"
+    end
 end
 
 if __FILE__ == $PROGRAM_NAME    
 
-    config_file = ".config"
+    $config_file = ".config"
     case ARGV.length
     when 0
         puts "usage: ruby %s [config] torrent-file" % [$PROGRAM_NAME]
@@ -120,7 +159,7 @@ if __FILE__ == $PROGRAM_NAME
     when 1
         torrent_file = ARGV[0]
     when 2
-        config_file = ARGV[0]
+        $config_file = ARGV[0]
         torrent_file = ARGV[1]
     end
 
@@ -130,14 +169,34 @@ if __FILE__ == $PROGRAM_NAME
     puts "\tclient we\'ve written"
     puts "\t======"
 
-    puts "\nUsing config file #{config_file}"
-    parse_config config_file
+    puts "\nUsing config file #{$config_file}"
+    config = parse_config_file
     torrent = Torrent.open(torrent_file)
 
     if torrent
-
-        puts "Parsed torrent metadata for #{torrent_file}."
+        
+        puts "Parsed torrent metadata for #{torrent_file}. Checking config file for torrent."
         #print_metadata torrent     #debug prints torrent metadata
+
+        if config.has_key? torrent.info_hash
+            puts "Torrent found."
+            torrent.bitfield = config[torrent.info_hash] # could do error checking here on the bitfield length...
+        else
+            puts "Adding torrent to config file"
+            bitfield_length = torrent.decoded_data["info"]["pieces"].length / 20
+            if bitfield_length % 8 != 0
+                bitfield_length = bitfield_length / 8
+                bitfield_length += 1 
+            else
+                bitfield_length = bitfield_length / 8
+            end
+            torrent.bitfield = "\x0" * bitfield_length
+            puts torrent.bitfield.length
+            puts "Bitfield: #{torrent.bitfield}"
+            update config, torrent #how often should the config be written to file? 
+            save config
+        end
+
 
         # initialize a Tracker object
         options = {:timeout => 5, :peer_id => $my_id}
@@ -145,12 +204,11 @@ if __FILE__ == $PROGRAM_NAME
 
         #array of available trackers
         trackers = connection.trackers
-#        puts "Getting tracker updates from #{trackers}."  #debug tracker info
+        # puts "Getting tracker updates from #{trackers}."  #debug tracker info
 
         #connect to first tracker in the list
         success = connection.connect_to_tracker 0
         connected_tracker = connection.successful_trackers.last
-
 
         # make a request to a successfully connected tracker
         if success
@@ -164,13 +222,13 @@ if __FILE__ == $PROGRAM_NAME
             peerlist = parse_tracker_response response
 
             puts "Peers (#{peerlist.length}):"
-            puts peerlist   #debug - prints peerlist
-
-            
+            # puts peerlist   #debug - prints peerlist
 
             # select a peer somehow
             other_client = "127.0.0.1"
-            lhost = Peer.new "127.0.0.1", 52042
+            lhost = Peer.new other_client, 52042
+            #other_client = "207.231.92.41"
+            #lhost = Peer.new other_client, 51413 
             peerlist += [lhost]
             
             # other_client = "209.234.249.226"
@@ -180,34 +238,18 @@ if __FILE__ == $PROGRAM_NAME
             # probably should make this a thread or otherwise non-blocking
             peer_socket = handshake( peerlist[i] , torrent.info_hash)  
 
-            ln = peer_socket.recv(4).unpack("C*").join.to_i #bitfield length
-            puts "Message length: #{ln}"
-            #perhaps the message class should deal with such things
-            id = peer_socket.recv(1).unpack("C*")[0]
-            if id == 5
-                puts "receiving #{other_client}'s bitfield:"
-                their_bitfield = peer_socket.recv(ln.to_i - 2)
-                puts "Peer's bitfield: #{their_bitfield.unpack('H*')}"
-            elsif
-                puts "Error: expected bitfield. Didn't get a bitfield. :("
-            end 
+            handle_messages peer_socket, torrent
+            
+            puts torrent.bitfield.unpack('H*')
 
-            # if own bitfield != \0\0\0...
-            # bitfield[:bitfield] = "" #(should this of a length equal to the number of pieces? probably should be stored in .config on a per-torrent setting?)
-            # peer_socket.send Message.new(:bitfield, bitfield)
-
-            # find a piece that you don't have at random, and then download it.
-            # strategically, you could open up threads with a large number of peers, figure out with pieces are more rare and request those (rarest first)
-                # is this also the step that figures out how to unchoke/sends an interest message?
-            # to request a piece, figure out the index from the bitfield, and send a request message. 
-            #begin receiving piece messages. once verified(?), send a 'have' message- (out to all peers, or just that one?)
-
-        elsif
+        else
             puts "Could not connect to tracker."
             # Perhaps we should try again soon. 
         end
-    elsif 
+    else
         puts "Torrent could not be opened."
     end
+    
+    save config 
 end
 

@@ -103,53 +103,13 @@ def parse_tracker_response response
     peerlist
 end
 
-#establish a connection
-def handshake(peer, info_hash)
-    sock = TCPSocket.new peer.address, peer.port 
-    sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
-    sock.send (info_hash + $my_id),0
-
-    # recving handshake. might want to make these peer attributes.
-    ln = sock.recv(1).unpack("C*")[0].to_i #to_i
-    
-    if ln != 19
-        puts "Response length : #{ln}"
-        return
-    end 
-
-    prot = sock.recv(19)
-    options = sock.recv(8)
-    their_hash = sock.recv(20)
-    puts their_hash.unpack("H*")
-    their_id = sock.recv(20)
-    puts their_id
-    
-    sock
-end
-
-def handle_messages peer_socket, torrent
-    if peer_socket == nil
-        puts "Client can't be reached or isn't talking about that torrent."
-        return 
-    end
-    ln = peer_socket.recv(4).unpack("C*").join.to_i #bitfield length
-    puts "Message length: #{ln}"
-    if ln > 0
-        id = peer_socket.recv(1).unpack("C*")[0]
-        rcvd_message = Message.from_peer id
-        puts rcvd_message
-        #perhaps the message class should deal with such things
-        if id == 5
-            their_bitfield = peer_socket.recv((ln.to_i - 1))
-            puts "Peer's bitfield (#{their_bitfield.length }):\n#{their_bitfield.unpack("H*")}"
-            puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.unpack('H*')}"
-            puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
-        else
-            puts "Error: expected bitfield. Didn't get a bitfield. :("
-        end 
-    else
-        puts "Keep alive"
-    end
+def spawn_peer_thread peer, torrent
+    puts "Sending handshake to client at #{peer} (def. in main method)"
+    peer_thr = Thread.new {
+        peer.handshake(torrent.info_hash)
+        peer.handle_messages torrent
+    }
+    peer_thr
 end
 
 if __FILE__ == $PROGRAM_NAME    
@@ -229,23 +189,15 @@ if __FILE__ == $PROGRAM_NAME
             # puts peerlist   #debug - prints peerlist
 
             # select a peer somehow
+            threadlist = []
             other_client = "127.0.0.1"
             lhost = Peer.new other_client, 52042
-            #other_client = "207.231.92.41"
-            #lhost = Peer.new other_client, 51413 
             peerlist += [lhost]
-            
-            # other_client = "209.234.249.226"
             i = peerlist.find_index {|x| x.address ==  other_client}
-            puts "Sending handshake to client at #{lhost} (def. in code at ~line 232)"
-    
-            # probably should make this a thread or otherwise non-blocking
-            peer_socket = handshake( peerlist[i] , torrent.info_hash)  
-
-            handle_messages peer_socket, torrent
-            
-            puts torrent.bitfield.unpack('H*')
-
+            peer_thr = spawn_peer_thread peerlist[i], torrent
+            threadlist += [peer_thr]
+            puts "Smile like you mean it"
+            threadlist.each {|t| t.join; print "#{t} ended"}
         else
             puts "Could not connect to tracker."
             # Perhaps we should try again soon. 

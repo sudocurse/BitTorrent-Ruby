@@ -120,7 +120,8 @@ def spawn_peer_thread peer, torrent
     num_pieces = torrent.decoded_data["info"]["pieces"].length
     piece_ln = torrent.decoded_data["info"]["piece length"]
     #(0..(num_pieces-1)).each do |n|
-    #peer.request_piece 0, piece_ln
+#   so far unsuccessful attempt at some hackery
+#    peer.request_piece 0, piece_ln
 
     peer_thread
 end

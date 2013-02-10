@@ -92,6 +92,7 @@ end
                     piece = payload[8, ln - 9]
                     puts "index at #{index}"
                     save_piece torrent.decoded_data["info"]["name"], piece, index
+                    puts "Saved piece #{index}"
                 when 8 
                     puts "cancel" # payload identical to request (id = 6)
                 else 
@@ -104,12 +105,10 @@ end
     end
 
     def request_piece n, ln
-        #puts "Sending request"
+        sleep 4
+        puts "Sending request"
         # this doesn't seem to work
-        #@sock.send [0, 0, 0, 13, 6].pack("C4"), 0
-        #@sock.send n.to_be,0
-        #@sock.send 0.to_be,0
-        #@sock.send ln.to_be,0
+        @sock.send 13.to_be + 6.chr + n.to_be + 0.to_be + ln.to_be,0
         # this code is entirely redundant with the message class function "to_peer"
         #@sock.send "\0"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
         #end

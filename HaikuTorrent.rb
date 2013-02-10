@@ -198,9 +198,9 @@ if __FILE__ == $PROGRAM_NAME
             lhost = Peer.new other_client, 52042
             peerlist += [lhost]
             i = peerlist.find_index {|x| x.address ==  other_client}
+
             peer_thr = spawn_peer_thread peerlist[i], torrent
             threadlist += [peer_thr]
-            puts "Smile like you mean it"
             threadlist.each {|t| t.join; print "#{t} ended"}
         else
             puts "Could not connect to tracker."

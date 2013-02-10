@@ -20,12 +20,11 @@ class Peer
     end
 
     #establish a connection
-    def handshake(info_hash)
-        @sock = TCPSocket.new @address, @port 
+    def handshake info_hash
+        @sock = TCPSocket.new @address, @port  #need error handling for refused connections, or more likely, missing hosts
         @sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
         @sock.send (info_hash + $my_id),0
 
-        # recving handshake. might want to make these peer attributes.
         ln = @sock.recv(1).unpack("C*")[0].to_i #to_i
         
         if ln != 19
@@ -37,51 +36,58 @@ class Peer
         options = @sock.recv(8)
         their_hash = @sock.recv(20)
         puts their_hash.unpack("H*")
-        their_id = @sock.recv(20)
+        their_id = @sock.recv(20)       #could use their id to ID threads
         puts their_id
         @sock
     end
 
     def handle_messages torrent
+
         if @sock == nil
             puts "Client can't be reached or isn't talking about that torrent."
             return 
         end
+
+        #puts @state
         until @sock == nil
             ln = @sock.recv(4).unpack("C*").join.to_i #bitfield length
-            print "Message from #{self} of length: #{ln} of type: "
             if ln > 0
+                print "Message from #{self}\tlength: #{ln}\ttype: "
                 id = @sock.recv(1).unpack("C*")[0]
                 payload = @sock.recv((ln.to_i - 1))
-                
                 case id
                 # these first 4 should update the state variable
                 when 0 
                     puts "choke"
+                    @state[2] = @state[2] | 1
                 when 1 
                     puts "unchoke"
+                    @state[2] = @state[2] & 0
                 when 2 
                     puts "interested"
+                    @state[3] = @state[3] | 1
                 when 3 
                     puts "uninterested"
+                    @state[3] = @state[3] & 0
                 when 4
-                    puts "have piece" # payload includes a piece index
+                    puts "have piece at index: #{payload.unpack("H*")[0]}" 
+                    # update the bitfield
                 when 5
                     their_bitfield = payload
                     puts "Peer's bitfield (#{their_bitfield.length }):\n#{their_bitfield.unpack("H*")}"
                     puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.unpack('H*')}"
                     puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
                 when 6 
-                    puts "request"
+                    puts "requesting piece" # 4-byte piece index, 4-byte offset, 4-byte length
                 when 7 
-                    puts "data block!"
+                    puts "data block!" # 4 byte index, 4-byte offset, (ln - 9)-byte data block
                 when 8 
-                    puts "cancel"
+                    puts "cancel" # payload identical to request (id = 6)
                 else 
                     puts "Error: unexpected messages. Lower your expectations?"
                 end 
-            else
-                puts "Keep alive" #should keep a timer?
+            #else
+            #    puts "Keep alive" #should keep a timer?
             end
         end
     end

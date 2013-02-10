@@ -41,6 +41,11 @@ class Peer
         @sock
     end
 
+def save_piece name, piece, index
+        File.open(name + index+".piece", "wb") do |f|
+            f.write(piece)
+        end
+end
     def handle_messages torrent
 
         if @sock == nil
@@ -83,6 +88,10 @@ class Peer
                     puts "requesting piece" # 4-byte piece index, 4-byte offset, 4-byte length
                 when 7 
                     puts "data block!" # 4 byte index, 4-byte offset, (ln - 9)-byte data block
+                    index = payload.unpack("N").to_i
+                    piece = payload[8, ln - 9]
+                    puts "index at #{index}"
+                    save_piece torrent.decoded_data["info"]["name"], piece, index
                 when 8 
                     puts "cancel" # payload identical to request (id = 6)
                 else 
@@ -92,6 +101,18 @@ class Peer
             #    puts "Keep alive" #should keep a timer?
             end
         end
+    end
+
+    def request_piece n, ln
+        #puts "Sending request"
+        # this doesn't seem to work
+        #@sock.send [0, 0, 0, 13, 6].pack("C4"), 0
+        #@sock.send n.to_be,0
+        #@sock.send 0.to_be,0
+        #@sock.send ln.to_be,0
+        # this code is entirely redundant with the message class function "to_peer"
+        #@sock.send "\0"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
+        #end
     end
 end
 

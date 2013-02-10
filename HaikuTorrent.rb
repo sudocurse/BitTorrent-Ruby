@@ -111,12 +111,17 @@ end
 def spawn_peer_thread peer, torrent
     puts "Sending handshake to client at #{peer} (def. in main method)"
 
+    peer.handshake torrent.info_hash
     peer_thread = Thread.new {
-        peer.handshake torrent.info_hash
         peer.handle_messages torrent
     }
-
     peer_thread["peer"] = peer
+
+    num_pieces = torrent.decoded_data["info"]["pieces"].length
+    piece_ln = torrent.decoded_data["info"]["piece length"]
+    #(0..(num_pieces-1)).each do |n|
+    #peer.request_piece 0, piece_ln
+
     peer_thread
 end
 
@@ -196,10 +201,10 @@ if __FILE__ == $PROGRAM_NAME
             puts "Peers (#{peerlist.length}):"
             # puts peerlist   #debug - prints peerlist
 
-            # select a peer somehow (or rather, pick 4-10 at random)
+            # select a peer somehow (or rather, pick 4-10 at random?)
             select = []
 
-            ######## dummy code to deal with localhost
+            ######## dummy code to only put localhost into select[]
             other_client = "127.0.0.1"
             lhost = Peer.new other_client, 52042
             peerlist += [lhost]
@@ -213,6 +218,10 @@ if __FILE__ == $PROGRAM_NAME
             }
 
             # collect the bitfields from each thread using threadlist[x]["peer"].bitfield
+            # tabulate frequency of each piece?
+            # once rarest pieces are found, find peers that have those pieces (if frequency from select < 0, start looking in select[]) 
+            # spawn new outgoing thread. use same socket? maybe the peer should belong to the thread and not the other way around
+
             threadlist.each {|t| t.join; print "#{t} ended"}
         else
             puts "Could not connect to tracker."

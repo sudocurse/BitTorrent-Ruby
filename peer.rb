@@ -3,7 +3,7 @@ require 'bencode'
 
 class Peer 
     #create a peer
-    attr_reader :address, :state, :port, :sock
+    attr_reader :address, :state, :port, :sock, :bitfield
     def initialize address, port
         @address = address
         @port = port
@@ -73,10 +73,12 @@ class Peer
                     puts "have piece at index: #{payload.unpack("H*")[0]}" 
                     # update the bitfield
                 when 5
-                    their_bitfield = payload
-                    puts "Peer's bitfield (#{their_bitfield.length }):\n#{their_bitfield.unpack("H*")}"
-                    puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.unpack('H*')}"
+                    bitfield = payload
+                    puts "Peer's bitfield (#{bitfield.length }):\n#{bitfield.unpack("H*")}"
+                    puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{bitfield.unpack('H*')}"
                     puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
+
+                    #could store bitfield aggregates in torrent object... would have to have a count for each piece and a semaphore
                 when 6 
                     puts "requesting piece" # 4-byte piece index, 4-byte offset, 4-byte length
                 when 7 

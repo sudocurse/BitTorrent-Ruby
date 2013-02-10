@@ -110,11 +110,14 @@ end
 
 def spawn_peer_thread peer, torrent
     puts "Sending handshake to client at #{peer} (def. in main method)"
-    peer_thr = Thread.new {
-        peer.handshake(torrent.info_hash)
+
+    peer_thread = Thread.new {
+        peer.handshake torrent.info_hash
         peer.handle_messages torrent
     }
-    peer_thr
+
+    peer_thread["peer"] = peer
+    peer_thread
 end
 
 if __FILE__ == $PROGRAM_NAME    
@@ -193,14 +196,23 @@ if __FILE__ == $PROGRAM_NAME
             puts "Peers (#{peerlist.length}):"
             # puts peerlist   #debug - prints peerlist
 
-            # select a peer somehow
+            # select a peer somehow (or rather, pick 4-10 at random)
+            select = []
+
+            ######## dummy code to deal with localhost
             other_client = "127.0.0.1"
             lhost = Peer.new other_client, 52042
             peerlist += [lhost]
             i = peerlist.find_index {|x| x.address ==  other_client}
+            select = [peerlist[i]]
+            ######## end dummy code
 
-            peer_thr = spawn_peer_thread peerlist[i], torrent
-            threadlist += [peer_thr]
+            select.each { |peer|  
+                peer_thr = spawn_peer_thread peer, torrent
+                threadlist += [peer_thr]
+            }
+
+            # collect the bitfields from each thread using threadlist[x]["peer"].bitfield
             threadlist.each {|t| t.join; print "#{t} ended"}
         else
             puts "Could not connect to tracker."

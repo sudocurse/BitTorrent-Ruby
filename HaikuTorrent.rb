@@ -11,6 +11,11 @@ $version = "HT0002"
 $my_id = "" 
 $pstr = "BitTorrent protocol"
 $config_file = ""
+threadlist = []
+Signal.trap("SIGINT") do
+    threadlist.each { |t| puts " Killing #{t.kill}"}
+    abort "Interrupt received."
+end
 
 #we chose to use the current time for the string
 def generate_my_id 
@@ -189,7 +194,6 @@ if __FILE__ == $PROGRAM_NAME
             # puts peerlist   #debug - prints peerlist
 
             # select a peer somehow
-            threadlist = []
             other_client = "127.0.0.1"
             lhost = Peer.new other_client, 52042
             peerlist += [lhost]

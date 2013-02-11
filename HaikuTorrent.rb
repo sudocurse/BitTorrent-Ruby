@@ -11,6 +11,11 @@ $version = "HT0002"
 $my_id = "" 
 $pstr = "BitTorrent protocol"
 $config_file = ""
+threadlist = []
+Signal.trap("SIGINT") do
+    threadlist.each { |t| puts " Killing #{t.kill}"}
+    abort "Interrupt received."
+end
 
 #we chose to use the current time for the string
 def generate_my_id 
@@ -103,53 +108,22 @@ def parse_tracker_response response
     peerlist
 end
 
-#establish a connection
-def handshake(peer, info_hash)
-    sock = TCPSocket.new peer.address, peer.port 
-    sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
-    sock.send (info_hash + $my_id),0
+def spawn_peer_thread peer, torrent
+    puts "Sending handshake to client at #{peer} (def. in main method)"
 
-    # recving handshake. might want to make these peer attributes.
-    ln = sock.recv(1).unpack("C*")[0].to_i #to_i
-    
-    if ln != 19
-        puts "Response length : #{ln}"
-        return
-    end 
+    peer.handshake torrent.info_hash
+    peer_thread = Thread.new {
+        peer.handle_messages torrent
+    }
+    peer_thread["peer"] = peer
 
-    prot = sock.recv(19)
-    options = sock.recv(8)
-    their_hash = sock.recv(20)
-    puts their_hash.unpack("H*")
-    their_id = sock.recv(20)
-    puts their_id
-    
-    sock
-end
+    num_pieces = torrent.decoded_data["info"]["pieces"].length
+    piece_ln = torrent.decoded_data["info"]["piece length"]
+    #(0..(num_pieces-1)).each do |n|
+#   so far unsuccessful attempt at some hackery
+#    peer.request_piece 0, piece_ln
 
-def handle_messages peer_socket, torrent
-    if peer_socket == nil
-        puts "Client can't be reached or isn't talking about that torrent."
-        return 
-    end
-    ln = peer_socket.recv(4).unpack("C*").join.to_i #bitfield length
-    puts "Message length: #{ln}"
-    if ln > 0
-        id = peer_socket.recv(1).unpack("C*")[0]
-        rcvd_message = Message.from_peer id
-        puts rcvd_message
-        #perhaps the message class should deal with such things
-        if id == 5
-            their_bitfield = peer_socket.recv((ln.to_i - 1))
-            puts "Peer's bitfield (#{their_bitfield.length }):\n#{their_bitfield.unpack("H*")}"
-            puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.unpack('H*')}"
-            puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
-        else
-            puts "Error: expected bitfield. Didn't get a bitfield. :("
-        end 
-    else
-        puts "Keep alive"
-    end
+    peer_thread
 end
 
 if __FILE__ == $PROGRAM_NAME    
@@ -228,24 +202,28 @@ if __FILE__ == $PROGRAM_NAME
             puts "Peers (#{peerlist.length}):"
             # puts peerlist   #debug - prints peerlist
 
-            # select a peer somehow
+            # select a peer somehow (or rather, pick 4-10 at random?)
+            select = []
+
+            ######## dummy code to only put localhost into select[]
             other_client = "127.0.0.1"
             lhost = Peer.new other_client, 52042
-            #other_client = "207.231.92.41"
-            #lhost = Peer.new other_client, 51413 
             peerlist += [lhost]
-            
-            # other_client = "209.234.249.226"
             i = peerlist.find_index {|x| x.address ==  other_client}
-            puts "Sending handshake to client at #{lhost} (def. in code at ~line 232)"
-    
-            # probably should make this a thread or otherwise non-blocking
-            peer_socket = handshake( peerlist[i] , torrent.info_hash)  
+            select = [peerlist[i]]
+            ######## end dummy code
 
-            handle_messages peer_socket, torrent
-            
-            puts torrent.bitfield.unpack('H*')
+            select.each { |peer|  
+                peer_thr = spawn_peer_thread peer, torrent
+                threadlist += [peer_thr]
+            }
 
+            # collect the bitfields from each thread using threadlist[x]["peer"].bitfield
+            # tabulate frequency of each piece?
+            # once rarest pieces are found, find peers that have those pieces (if frequency from select < 0, start looking in select[]) 
+            # spawn new outgoing thread. use same socket? maybe the peer should belong to the thread and not the other way around
+
+            threadlist.each {|t| t.join; print "#{t} ended"}
         else
             puts "Could not connect to tracker."
             # Perhaps we should try again soon. 

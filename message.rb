@@ -1,12 +1,20 @@
 class Integer
-    def to_be
+    def to_be # int --> [int] --> "packedint"
         [self].pack('N')
     end
 end
 
 class String
-    def from_be
-        [self].unpack('N')
+    def from_be # "packedint" --> [int] --> [int][0] = int
+        self.unpack('N')[0]
+    end
+
+    def to_x
+        self.unpack('H*')[0]
+    end
+
+    def from_byte
+        self.unpack("C*")[0]
     end
 end
 
@@ -57,7 +65,7 @@ class Message
 
         when :request, :cancel
             Message.new(msg, {:index => info[start, inc].from_be,
-                            :begin => info[start + inc, inc].from_be
+                            :begin => info[start + inc, inc].from_be,
                             :length => info[start + (2 * inc), inc].from_be})
         when :piece
             Message.new(msg, {:index => info[start, inc].from_be,

@@ -12,10 +12,10 @@ $my_id = ""
 $pstr = "BitTorrent protocol"
 $config_file = ""
 threadlist = []
-Signal.trap("SIGINT") do
-    threadlist.each { |t| puts " Killing #{t.kill}"}
-    abort "Interrupt received."
-end
+# Signal.trap("SIGINT") do
+#     threadlist.each { |t| puts " Killing #{t.kill}"}
+#     abort "Interrupt received."
+# end
 
 #we chose to use the current time for the string
 def generate_my_id 
@@ -113,8 +113,9 @@ def spawn_peer_thread peer, torrent
 
     peer.handshake torrent.info_hash
     peer_thread = Thread.new {
-        peer.handle_messages torrent
+       # peer.handle_messages torrent
     }
+    peer.send_blocks_and_msgs  
     peer_thread["peer"] = peer
 
     num_pieces = torrent.decoded_data["info"]["pieces"].length

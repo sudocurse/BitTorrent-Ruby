@@ -1,5 +1,6 @@
 #require_relative 'bencode.rb'
 require 'bencode'
+require 'thread'
 
 class Peer 
     #create a peer
@@ -10,10 +11,6 @@ class Peer
     def initialize address, port
         @address = address
         @port = port
-        @state = 0b1010 
-        @sock = TCPSocket.new @address, @port  #need error handling for refused connections, or more likely, missing hosts
-        #moved socket to initialize - seems more natural to put this ivar in the init method - dnh
-        #connection
 
         @data_to_send = Queue.new #while sending requests, keeps a queue of data
 
@@ -42,6 +39,12 @@ class Peer
 
     #establish a connection
     def handshake info_hash
+
+        @sock = TCPSocket.new @address, @port  #need error handling for refused connections, or more likely, missing hosts
+        # was having some trouble with this in init, not sure why.
+        # Also, putting this in initialize means that as soon as a peer object is created so is its socket
+        # (so, when a tracker returns a list of 2000 peers, 2000 sockets are immediately created when the client is only likely to ever interact with less than 5% of that).
+
         @sock.send "\023"+"BitTorrent protocol"+"\0\0\0\0\0\0\0\0",0
         @sock.send (info_hash + $my_id),0
 
@@ -67,62 +70,55 @@ class Peer
             end
     end
 
-    def handle_messages torrent
+    def handle_messages msg
 
-        if @sock == nil
-            puts "Client can't be reached or isn't talking about that torrent."
-            return 
-        end
+        case Message::ID_LIST[msg.id]
+        when :choke
 
-        #puts @state
-        until @sock == nil
-            ln = @sock.recv(4).unpack("C*").join.to_i #bitfield length
-            if ln > 0
-                print "Message from #{self}\tlength: #{ln}\ttype: "
-                id = @sock.recv(1).unpack("C*")[0]
-                payload = @sock.recv((ln.to_i - 1))
-                case id
-                # these first 4 should update the state variable
-                when 0 
-                    puts "choke"
-                    @state[2] = @state[2] | 1
-                when 1 
-                    puts "unchoke"
-                    @state[2] = @state[2] & 0
-                when 2 
-                    puts "interested"
-                    @state[3] = @state[3] | 1
-                when 3 
-                    puts "uninterested"
-                    @state[3] = @state[3] & 0
-                when 4
-                    puts "have piece at index: #{payload.unpack("H*")[0]}" 
-                    # update the bitfield
-                when 5
-                    bitfield = payload
-                    puts "Peer's bitfield (#{bitfield.length }):\n#{bitfield.unpack("H*")}"
-                    puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{bitfield.unpack('H*')}"
-                    puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
+            puts "choke"
 
-                    #could store bitfield aggregates in torrent object... would have to have a count for each piece and a semaphore
-                when 6 
-                    puts "requesting piece" # 4-byte piece index, 4-byte offset, 4-byte length
-                when 7 
-                    puts "data block!" # 4 byte index, 4-byte offset, (ln - 9)-byte data block
-                    index = payload.unpack("N").to_i
-                    piece = payload[8, ln - 9]
-                    puts "index at #{index}"
-                    save_piece torrent.decoded_data["info"]["name"], piece, index
-                    puts "Saved piece #{index}"
-                when 8 
-                    puts "cancel" # payload identical to request (id = 6)
-                else 
-                    puts "Error: unexpected messages. Lower your expectations?"
-                end 
-            #else
-            #    puts "Keep alive" #should keep a timer?
-            end
-        end
+            @p_choked = 1
+
+        when :unchoke
+
+            puts "unchoke"
+
+            @p_choked = 0
+ 
+        when :interested
+ 
+            puts "interested"
+ 
+            @p_interested = 1
+ 
+        when :not_interested
+
+            puts "uninterested"
+
+            @p_interested = 0
+ 
+        when :have
+ 
+            puts "have piece at index: #{msg.params[:index]}" 
+
+            #update piece rarity bitfield
+        when :bitfield
+ 
+            bitfield = msg.params[:bitfield]
+            puts "bitfield (#{bitfield.length}):\n#{bitfield.to_x}"
+            #puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.to_x)}"
+            #puts "with #{ torrent.decoded_data["info"]["piece length"]} bytes / piece"
+        when :request
+           puts "requesting piece at #{msg.params[:index]}"
+
+        when :piece
+            puts "data block at #{msg.params[:index]}"
+        when :cancel
+            puts "cancelling piece at #{msg.params[:index]}" 
+        else
+            puts "Error: unexpected message."
+        end 
+
     end
 
     #gets the block, deletes block from list of desired blocks, notifies that block has
@@ -142,7 +138,7 @@ class Peer
         #if the peer doesn't have the desired pieces, we'll just chill
 
         #thread that handles getting blocks/msgs in terms of bits
-        Thread.new 
+        Thread.new do
             begin
                 while @started
                     get_blocks_and_msgs
@@ -155,7 +151,7 @@ class Peer
 
         #thread that handles receiving blocks//msgs in terms of bits
 
-        Thread.new
+        Thread.new do
             begin
                 while @started
                     get_blocks_and_msgs
@@ -185,8 +181,8 @@ class Peer
         when Message
             #    ID_LIST = [:choke, :unchoke, :interested, :not_interested, :have, :bitfield, :request, :piece, :cancel]
 
-           msg = Message.new(:piece, {:block => data, :index => data., :begin => data.begin}).to_peer
-            send_data
+            msg = Message.new(:piece, {:block => data, :index => data.begin, :begin => data.begin}).to_peer
+            send_data data.to_peer
         else
             puts "Invalid data: #{data}."
         end
@@ -212,14 +208,14 @@ class Peer
     def convert_to_block_or_msg
 
         #first, see if there's a keep alive message
-        length = Integer.new
+        length = -1
         #convert data received from 32-bit be format
         while(0 == (length = receive_data(4).from_be))
             puts "Got keep alive message." #rm
         end
 
         #get message id
-        id = receive_data(1)
+        id = receive_data(1).from_byte
 
         #if the id tells you to get a piece, you want to get the  next block that's specified
         if :piece == Message::ID_LIST[id] 
@@ -228,7 +224,7 @@ class Peer
             block = Block.new(msg.index, msg.begin, length)
 
             until length <= 0
-                block.data += receive_data([len, BUFFER].min)
+                block.data += receive_data([len, BUFFER].min))
                 length -= [len, BUFFER].min
             end
         else

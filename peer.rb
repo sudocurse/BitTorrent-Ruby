@@ -177,9 +177,9 @@ class Peer
     def get_blocks_and_msgs
         data = @data_to_send.deq
         case data
-        when Message
-            send_data data.to_peer
         when Block
+            send_data data.to_peer
+        when Message
             #    ID_LIST = [:choke, :unchoke, :interested, :not_interested, :have, :bitfield, :request, :piece, :cancel]
 
             msg = Message.new(:piece, {:block => data, :index => data., :begin => data.begin}).to_peer

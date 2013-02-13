@@ -4,6 +4,12 @@ class Integer
     end
 end
 
+class String
+    def from_be
+        [self].unpack('N')
+    end
+end
+
 class Message
 
     ID_LIST = [:choke, :unchoke, :interested, :not_interested, :have, :bitfield, :request, :piece, :cancel]
@@ -32,11 +38,32 @@ class Message
         end
     end
 
-    def self.from_peer id
-        if ID_LIST.length < id
+    def self.from_peer id, info
+
+        start = 0
+        inc = 4
+
+        msg = ID_LIST.index(id)
+
+        case msg
+        when :choke, :unchoke, :interested, :not_interested
+            Message.new(msg)
+
+        when :have
+            Message.new(msg, {:index => info[start, inc].from_be})
+
+        when :bitfield
+            Message.new(msg, {:bitfield => info}) #from_be??? rm
+
+        when :request, :cancel
+            Message.new(msg, {:index => info[start, inc].from_be,
+                            :begin => info[start + inc, inc].from_be
+                            :length => info[start + (2 * inc), inc].from_be})
+        when :piece
+            Message.new(msg, {:index => info[start, inc].from_be,
+                            :begin => info[start + inc, inc].from_be})
+        else
             return :error
-        else 
-            return ID_LIST.index(id)
         end
     end
 end

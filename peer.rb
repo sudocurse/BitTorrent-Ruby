@@ -3,6 +3,9 @@ require 'bencode'
 
 class Peer 
     #create a peer
+
+    BUFFER = 4096
+
     attr_reader :address, :state, :port, :sock, :bitfield
     def initialize address, port
         @address = address
@@ -182,7 +185,7 @@ class Peer
         when Message
             #    ID_LIST = [:choke, :unchoke, :interested, :not_interested, :have, :bitfield, :request, :piece, :cancel]
 
-            msg = Message.new(:piece, {:block => data, :index => data., :begin => data.begin}).to_peer
+           msg = Message.new(:piece, {:block => data, :index => data., :begin => data.begin}).to_peer
             send_data
         else
             puts "Invalid data: #{data}."
@@ -208,6 +211,31 @@ class Peer
     #converts bits that will either be blocks or messages
     def convert_to_block_or_msg
 
+        #first, see if there's a keep alive message
+        length = Integer.new
+        #convert data received from 32-bit be format
+        while(0 == (length = receive_data(4).from_be))
+            puts "Got keep alive message." #rm
+        end
+
+        #get message id
+        id = receive_data(1)
+
+        #if the id tells you to get a piece, you want to get the  next block that's specified
+        if :piece == Message::ID_LIST[id] 
+            length -= 9 #must subtract the message length prefix for a piece
+            msg = Message.from_peer(id, receive_data(8))
+            block = Block.new(msg.index, msg.begin, length)
+
+            until length <= 0
+                block.data += receive_data([len, BUFFER].min)
+                length -= [len, BUFFER].min
+            end
+        else
+        #otherwise you just want to add whatever message you get to the queue
+            msg = Message.from_peer(id, receive_data(length)
+        end
+
     end
         
     
@@ -225,6 +253,7 @@ class Peer
             all_data += data_to_store
         end
         #rm error handling if data_to_store is empty
+        all_data
     end
 end
 

@@ -8,7 +8,7 @@ require_relative 'tracker.rb'
 require_relative 'message.rb'
 
 $version = "HT0002"
-$my_id = "" 
+$my_id = ""
 $pstr = "BitTorrent protocol"
 $config_file = ""
 threadlist = []
@@ -18,23 +18,23 @@ threadlist = []
 # end
 
 #we chose to use the current time for the string
-def generate_my_id 
+def generate_my_id
     return "-"+$version+"-"+"%12d" % (Time.now.hash % 1000000000000).to_s
 end
 
-def parse_config_file 
+def parse_config_file
 
     config = Hash.new
 
     if File.exist?($config_file) #if either .config or the user defined config file exists:
-        
+
         encoded =  File.open($config_file, "rb").read.strip
         config = BEncode.load(encoded)
         $my_id = config['my_id']
 
     elsif $config_file == ".config" # if not, and there's no user supplied string
         puts "Default config file not found. Creating .config."
-        
+
         $my_id = generate_my_id
         config['my_id'] =  $my_id
         save config
@@ -50,7 +50,7 @@ def update config, torrent
     config[torrent.info_hash] = torrent.bitfield
 end
 
-def save config 
+def save config
         File.open($config_file, "wb") do |f|
             f.write(config.bencode + "\n")
         end
@@ -85,24 +85,24 @@ end
 def parse_tracker_response response
     resp_d = response[:body].bdecode
     # puts "Response Keys:" + resp_d.keys.to_s #response keys. useful for unhandled response cases
-    
+
     # interval in seconds we should wait before sending requests
     num_seeders = resp_d['complete']
     num_leechers = resp_d['incomplete']
     interval = resp_d['interval']
     puts "\nSeeders: #{num_seeders}\tLeechers: #{num_leechers}\tInterval: #{interval}"
-    
+
     # peerlist. i assume if this comes in dictionary form, bencode will already have handled it.
 
-    peers = resp_d['peers'] 
+    peers = resp_d['peers']
     peerlist = Array.new
     # puts peers.unpack("H*")   #debug peerlist
-    until peers == ""                
+    until peers == ""
         ip = peers.unpack("C4").join(".")   # grabs the 4 leftmost 8bit unsigneds from peers
         peers = peers[4, peers.length]      # chops the contents of addr off of peers
         port = peers.unpack("n").join       # grabs the leftmost 16-bit big-endian from peers
         peers = peers[2, peers.length]      # chops the contents of addr off of peers
-        p = Peer.new( ip, port.to_s )   
+        p = Peer.new( ip, port.to_s )
         peerlist += [p]
     end
     peerlist
@@ -115,7 +115,7 @@ def spawn_peer_thread peer, torrent
     peer_thread = Thread.new {
        # peer.handle_messages torrent
     }
-    peer.send_blocks_and_msgs  
+    peer.send_blocks_and_msgs
     peer_thread["peer"] = peer
 
     num_pieces = torrent.decoded_data["info"]["pieces"].length
@@ -127,7 +127,7 @@ def spawn_peer_thread peer, torrent
     peer_thread
 end
 
-if __FILE__ == $PROGRAM_NAME    
+if __FILE__ == $PROGRAM_NAME
 
     $config_file = ".config"
     case ARGV.length
@@ -153,7 +153,7 @@ if __FILE__ == $PROGRAM_NAME
     torrent = Torrent.open(torrent_file)
 
     if torrent
-        
+
         puts "Parsed torrent metadata for #{torrent_file}. Checking config file for torrent."
         #print_metadata torrent     #debug prints torrent metadata
 
@@ -165,14 +165,14 @@ if __FILE__ == $PROGRAM_NAME
             bitfield_length = torrent.decoded_data["info"]["pieces"].length / 20
             if bitfield_length % 8 != 0
                 bitfield_length = bitfield_length / 8
-                bitfield_length += 1 
+                bitfield_length += 1
             else
                 bitfield_length = bitfield_length / 8
             end
             torrent.bitfield = "\x0" * bitfield_length
             puts torrent.bitfield.length
             puts "Bitfield: #{torrent.bitfield}"
-            update config, torrent #how often should the config be written to file? 
+            update config, torrent #how often should the config be written to file?
             save config
         end
 
@@ -194,7 +194,7 @@ if __FILE__ == $PROGRAM_NAME
 
             response = connection.make_tracker_request( :uploaded => 1, :downloaded => 10,
                       :left => 100, :compact => 0,
-                      :no_peer_id => 0, :event => 'started', 
+                      :no_peer_id => 0, :event => 'started',
                       :index => 0)
 
             #puts "RESPONSE: " + response.to_s      # debug - prints tracker response
@@ -214,25 +214,25 @@ if __FILE__ == $PROGRAM_NAME
             select = [peerlist[i]]
             ######## end dummy code
 
-            select.each { |peer|  
+            select.each { |peer|
                 peer_thr = spawn_peer_thread peer, torrent
                 threadlist += [peer_thr]
             }
 
             # collect the bitfields from each thread using threadlist[x]["peer"].bitfield
             # tabulate frequency of each piece?
-            # once rarest pieces are found, find peers that have those pieces (if frequency from select < 0, start looking in select[]) 
+            # once rarest pieces are found, find peers that have those pieces (if frequency from select < 0, start looking in select[])
             # spawn new outgoing thread. use same socket? maybe the peer should belong to the thread and not the other way around
 
             threadlist.each {|t| t.join; print "#{t} ended"}
         else
             puts "Could not connect to tracker."
-            # Perhaps we should try again soon. 
+            # Perhaps we should try again soon.
         end
     else
         puts "Torrent could not be opened."
     end
-    
-    save config 
+
+    save config
 end
 

@@ -2,7 +2,7 @@
 require 'bencode'
 require 'thread'
 
-class Peer 
+class Peer
     #create a peer
 
     BUFFER = 4096
@@ -24,12 +24,8 @@ class Peer
         @p_blocks_to_get = []
         @p_interested = false
         @p_choked = true
-        
+
         @started = false #tracks whether request has been started
-        # @state[0] = am choking
-        # @state[1] = am interested
-        # @state[2] = peer choking
-        # @state[3] = peer interested
     end
 
 
@@ -49,17 +45,17 @@ class Peer
         @sock.send (info_hash + $my_id),0
 
         ln = @sock.recv(1).unpack("C*")[0].to_i #to_i
-        
+
         if ln != 19
             puts "Response length : #{ln}"
             return
-        end 
+        end
 
         prot = @sock.recv(19)
         options = @sock.recv(8)
         their_hash = @sock.recv(20)
         puts their_hash.unpack("H*")
-        their_id = @sock.recv(20)       #could use their id to ID threads
+        their_id = @sock.recv(20)
         puts their_id
         @sock
     end
@@ -84,26 +80,26 @@ class Peer
             puts "unchoke"
 
             @p_choked = 0
- 
+
         when :interested
- 
+
             puts "interested"
- 
+
             @p_interested = 1
- 
+
         when :not_interested
 
             puts "uninterested"
 
             @p_interested = 0
- 
+
         when :have
- 
-            puts "have piece at index: #{msg.params[:index]}" 
+
+            puts "have piece at index: #{msg.params[:index]}"
 
             #update piece rarity bitfield
         when :bitfield
- 
+
             bitfield = msg.params[:bitfield]
             puts "bitfield (#{bitfield.length}):\n#{bitfield.to_x}"
             #puts "Our bitfield (#{torrent.bitfield.length}):\t\n#{torrent.bitfield.to_x)}"
@@ -114,10 +110,10 @@ class Peer
         when :piece
             puts "data block at #{msg.params[:index]}"
         when :cancel
-            puts "cancelling piece at #{msg.params[:index]}" 
+            puts "cancelling piece at #{msg.params[:index]}"
         else
             puts "Error: unexpected message."
-        end 
+        end
 
     end
 
@@ -156,7 +152,7 @@ class Peer
                 while @started
                     get_blocks_and_msgs
                 end
-            rescue IOError  
+            rescue IOError
                 @running = false
                 #again, more error handling?
             end
@@ -196,8 +192,10 @@ class Peer
 
         case data
         when Message
+            puts "data!"
             handle_messages data
         when Block
+            puts "block!"
             handle_blocks data
         else
             puts "Invalid data: #{data}."
@@ -218,23 +216,23 @@ class Peer
         id = receive_data(1).from_byte
 
         #if the id tells you to get a piece, you want to get the  next block that's specified
-        if :piece == Message::ID_LIST[id] 
+        if :piece == Message::ID_LIST[id]
             length -= 9 #must subtract the message length prefix for a piece
             msg = Message.from_peer(id, receive_data(8))
             block = Block.new(msg.index, msg.begin, length)
 
             until length <= 0
-                block.data += receive_data([len, BUFFER].min))
+                block.data += receive_data([len, BUFFER].min)
                 length -= [len, BUFFER].min
             end
         else
         #otherwise you just want to add whatever message you get to the queue
-            msg = Message.from_peer(id, receive_data(length)
+            msg = Message.from_peer(id, receive_data(length))
         end
 
     end
-        
-    
+
+
     def send_data data
         if data
             @sock.send(data, 0)
@@ -243,7 +241,7 @@ class Peer
 
     def receive_data length
         all_data = ""
-
+        puts "rcv length: #{length}"
         while all_data.length < length
             data_to_store = @sock.recv(length-all_data.length)
             all_data += data_to_store
